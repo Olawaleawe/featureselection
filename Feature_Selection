@@ -1,0 +1,166 @@
+#################################################################
+##############LOAD PACKAGES######################################
+#################################################################
+library(mlbench)
+library(caret)
+library(naivebayes)
+library(rpart)
+library(psych)
+library(MASS)
+library(class)
+library(e1071)
+library(ROSE)
+library(randomForest)
+library(lattice)
+library(ggplot2)
+library(caretEnsemble)
+#################################################################
+###LOAD DATA
+#################################################################
+ndata = read.csv("NutritionData.csv", header=TRUE)
+names(ndata)
+dim(ndata)
+attach(ndata)
+head(ndata)
+MBMI
+ndata=ndata[,-c(21,23)]
+names(ndata)
+dim(ndata)
+#################################################################
+###DATA PARTITION
+##################################################################
+ind=sample(2, nrow(ndata),replace=T,prob=c(0.70,0.30))
+train=ndata[ind==1,]
+test= ndata[ind==2,]
+dim(train)
+dim(test)
+######FEATURE SELECTION FOR CLASSIFICATION
+### 1. Boruta algorithm to determine the best variables
+library(Boruta)
+borC = Boruta(factor(MBMICAT)~., data = ndata, doTrace = 2, maxRuns=500)
+print(borC)
+par(pty='m')
+plot(borC,las=2,cex.axis=0.7)
+plotImpHistory(borC)
+bor1=TentativeRoughFix(borC)
+attStats(bor1)
+####################################################################
+#Visualize the Data
+featurePlot(x=ndata[,-21],y=ndata[,21],plot='box',auto.key=list(columns=4))
+#metric=c('Accuracy', 'RMSE','MAE', 'Rsquared')
+# Prepare training scheme for your models
+control <- trainControl(method="repeatedcv", number=10, repeats=3)
+#######################################################################
+# TRAIN THE MODELS
+####################################################################
+# train the RF model
+set.seed(7)
+modelrf <- train(factor(MBMICAT) ~ LOCATION + hasFarm + MothersAge + ToiletFacility +WaterSource +EduLevel+ RefuseDisposal, data= train, method="rf", trControl=control)
+modelrf$results
+modelrf
+predrf=predict(modelrf,newdata = test)
+predrf
+confusionMatrix(predrf,as.factor(test$MBMICAT))
+plot(varImp(modelrf, scale=T))
+formula= (factor(MBMICAT) ~ LOCATION + hasFarm + MothersAge + ToiletFacility +WaterSource +EduLevel+ RefuseDisposal)
+#train the DT
+set.seed(7)
+modelDT <- train(formula, data=train, method="C5.0", trControl=control, verbose=FALSE)
+modelDT$results
+predDT=predict(modelDT,newdata = test)
+predDT
+confusionMatrix(predDT,as.factor(test$MBMICAT))
+plot(varImp(modelDT,scale=F))
+# train the SVM model
+set.seed(7)
+modelSvm <- train(formula, data= train, method="svmRadial", trControl=control)
+modelSvm$results
+predSvm=predict(modelSvm,newdata = test)
+predSvm
+confusionMatrix(predSvm,as.factor(test$MBMICAT))
+plot(varImp(modelSvm, scale=T))
+# train the CART model
+set.seed(7)
+modelcart <- train(formula,
+                 data = train, 
+                 method = "gbm",
+                 #metric = metric,
+                 trControl = control)
+plot(modelcart,exta=2)
+modelcart$results
+predcart=predict(modelcart,newdata = test)
+predcart
+confusionMatrix(predcart,as.factor(test$MBMICAT))
+plot(varImp(modelcart, scale=T))
+#plot(modelcart$finalModel, uniform=TRUE,
+ #    main="Classification Tree")
+#text(modelcart$finalModel, use.n.=TRUE, all=TRUE, cex=.8)
+suppressMessages(library(rattle))
+fancyRpartPlot(modelcart$finalModel)
+library(rpart.plot)
+rpart.plot(modelcart$finalModel)
+# train the KNN model
+# train the KNN model
+set.seed(7)
+modelknn <- train(formula,
+                 data = train, 
+                 method = "knn",
+                 trControl = control)
+modelknn$results
+predknn=predict(modelknn,newdata = test)
+predknn
+confusionMatrix(predknn,as.factor(test$MBMICAT))
+plot(varImp(modelknn, scale=T))
+# train the LVQ model
+#set.seed(7)
+modellvq <- train(formula, data=train, method="lvq", trControl=control)
+modellvq$results
+predlvq=predict(modellvq,newdata = test)
+predlvq
+confusionMatrix(predlvq,as.factor(test$MBMICAT))
+plot(varImp(modellvq, scale=T))
+# train the GAM model
+set.seed(7)
+modelgam <- train(formula, data=train, method="gam", trControl=control)
+modelgam$results
+predgam=predict(modelgam,newdata = test)
+predgam
+confusionMatrix(predgam,as.factor(test$MBMICAT))
+plot(varImp(modelgam, scale=T))
+# train the LDA model
+set.seed(7)
+modellda <- train(formula, data=train, method="lda", trControl=control)
+modellda$results
+predlda=predict(modellda,newdata = test)
+predlda
+confusionMatrix(predlda,as.factor(test$MBMICAT))
+plot(varImp(modellda, scale=T))
+
+# train the GLM model
+set.seed(7)
+modelglm <- train(formula, data=train, method="glm", trControl=control)
+modelglm$results
+predglm=predict(modelglm,newdata = test)
+predglm
+confusionMatrix(predglm,as.factor(test$MBMICAT))
+plot(varImp(modelglm, scale=T))
+# train the Naive Bayes model
+set.seed(7)
+modelnb <- train(formula, data=train, method="naive_bayes", trControl=control)
+modelnb$results
+prednb=predict(modelnb,newdata = test)
+prednb
+confusionMatrix(prednb,as.factor(test$MBMICAT))
+plot(varImp(modelnb, scale=T))
+######Get the resample results and compare
+results <- resamples(list(KNN=modelknn, NB=modelnb,RF=modelrf, SVM=modelSvm, DT=modelDT, LDA=modellda))
+# summarize the distributions
+summary(results)
+# boxplots of results
+bwplot(results)
+# dot plots of results
+dotplot(results)
+#####################################################################################
+#####################################################################################
+
+
